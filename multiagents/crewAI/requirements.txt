@@ -1,0 +1,10 @@
+
+crewai
+crewai[tools]
+duckduckgo-search
+python-dotenv
+langchain-community
+langchain_openai
+streamlit
+youtube-transcript-api
+youtube-dl
