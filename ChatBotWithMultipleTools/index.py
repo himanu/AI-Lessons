@@ -1,9 +1,7 @@
 import ollama
 import json
 
-MODEL_NAME = "llama3"  # or "gpt-3.5-turbo" for a cheaper option
-# MODEL_NAME = "claude-3-opus-20240229"
-
+MODEL_NAME = "llama3.1"
 class FakeDatabase:
     def __init__(self):
         self.customers = [
@@ -67,67 +65,80 @@ class FakeDatabase:
 
 tools = [
     {
-        "name": "get_user",
-        "description": "Looks up a user by email, phone, or username.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "key": {
-                    "type": "string",
-                    "enum": ["email", "phone", "username"],
-                    "description": "The attribute to search for a user by (email, phone, or username)."
+        "type": "function",
+        "function": {
+            "name": "get_user",
+            "description": "Looks up a user by email, phone, or username.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "key": {
+                        "type": "string",
+                        "enum": ["email", "phone", "username"],
+                        "description": "The attribute to search for a user by (email, phone, or username)."
+                    },
+                    "value": {
+                        "type": "string",
+                        "description": "The value to match for the specified attribute."
+                    }
                 },
-                "value": {
-                    "type": "string",
-                    "description": "The value to match for the specified attribute."
-                }
-            },
-            "required": ["key", "value"]
+                "required": ["key", "value"]
+            }
         }
     },
     {
-        "name": "get_order_by_id",
-        "description": "Retrieves the details of a specific order based on the order ID. Returns the order ID, product name, quantity, price, and order status.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "order_id": {
-                    "type": "string",
-                    "description": "The unique identifier for the order."
-                }
-            },
-            "required": ["order_id"]
+        "type": "function",
+        "function": {
+            "name": "get_order_by_id",
+            "description": "Retrieves the details of a specific order based on the order ID. Returns the order ID, product name, quantity, price, and order status.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "order_id": {
+                        "type": "string",
+                        "description": "The unique identifier for the order."
+                    }
+                },
+                "required": ["order_id"]
+            }
         }
     },
     {
-        "name": "get_customer_orders",
-        "description": "Retrieves the list of orders belonging to a user based on a user's customer id.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "customer_id": {
-                    "type": "string",
-                    "description": "The customer_id belonging to the user"
-                }
-            },
-            "required": ["customer_id"]
+        "type": "function",
+        "function": {
+            "name": "get_customer_orders",
+            "description": "Retrieves the list of orders belonging to a user based on a user's customer id.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "customer_id": {
+                        "type": "string",
+                        "description": "The customer_id belonging to the user"
+                    }
+                },
+                "required": ["customer_id"]
+            }
         }
     },
     {
-        "name": "cancel_order",
-        "description": "Cancels an order based on a provided order_id.  Only orders that are 'processing' can be cancelled",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "order_id": {
-                    "type": "string",
-                    "description": "The order_id pertaining to a particular order"
-                }
-            },
-            "required": ["order_id"]
+        "type": "function",
+        "function": {
+            "name": "cancel_order",
+            "description": "Cancels an order based on a provided order_id. Only orders that are 'processing' can be cancelled",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "order_id": {
+                        "type": "string",
+                        "description": "The order_id pertaining to a particular order"
+                    }
+                },
+                "required": ["order_id"]
+            }
         }
     }
 ]
+
 
 db = FakeDatabase()
 
@@ -142,37 +153,54 @@ def process_tool_call(tool_name, tool_input):
         return db.cancel_order(tool_input["order_id"])
     
 def simple_chat():
+    system_prompt = """
+    You are a customer support chat bot for an online retailer called TechNova. 
+    Your job is to help users look up their account, orders, and cancel orders.
+    Be helpful and brief in your responses.
+    You have access to a set of tools, but only use them when needed.  
+    If you do not have enough information to use a tool correctly, ask a user follow up questions to get the required inputs.
+    Don't shy in asking the follow up question. You must not call any of the tools unless you have the required data from a user. 
+    Even for a slight confusion ask it to user.
+    Never call tool functions with assumption about arguments. Better to ask user it again then assuming argument of tool function
+    In each conversational turn, you will begin by thinking about your response. 
+    Once you're done, you will write a user-facing response. 
+    It's important to place all user-facing conversational responses in <reply></reply> XML tags to make them easy to parse.
+    """
     user_message = input("\nUser: ")
-    messages = [{"role": "user", "content": user_message}]
+    messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_message}]
     while True:
         if messages[-1].get("role") == "assistant":
             user_message = input("\nUser: ")
+            if (user_message == "NO"):
+                print(messages)
+                return
             messages.append({"role": "user", "content": user_message})
 
         # Send request to OpenAI instead of Claude
         response = ollama.chat(
             model=MODEL_NAME,
             messages=messages,
-            functions=tools,  # OpenAI supports function calling
-            tool_choice="auto"
+            tools=tools,
         )
-        assistant_message = response.choices[0].message
-        messages.append(assistant_message)
+        assistant_message = response.message
+        messages.append({
+            "role": "assistant",
+            "content": assistant_message.content
+        })
 
         # Check if the model wants to use tools
         if assistant_message.tool_calls:
             for tool_call in assistant_message.tool_calls:
                 tool_name = tool_call.function.name
-                tool_input = json.loads(tool_call.function.arguments)
-                print(f"======Assistant wants to use the {tool_name} tool======")
+                tool_input = tool_call.function.arguments
+                print(f"======Assistant wants to use the {tool_name} tool with input {tool_input}======")
 
                 # Run the tool
                 tool_result = process_tool_call(tool_name, tool_input)
-
+                print(f"tool result {tool_result}")
                 # Add tool result to messages
                 messages.append({
                     "role": "tool",
-                    "tool_call_id": tool_call.id,
                     "name": tool_name,
                     "content": str(tool_result)
                 })
