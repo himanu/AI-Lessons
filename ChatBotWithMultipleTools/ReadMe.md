@@ -1,11 +1,11 @@
 # Customer Service Chatbot with Multiple Tools
 
-This project implements an intelligent customer service chatbot powered by the Claude LLM model and integrated with various tools to handle customer queries efficiently.
+This project implements an intelligent customer service chatbot powered by the LLAMA model and integrated with various tools to handle customer queries efficiently.
 
 ## Overview
 
 The chatbot is designed to provide quick and accurate responses to customer inquiries by leveraging:
-- Claude LLM for natural language understanding and generation
+- LLM for natural language understanding and generation
 - Direct integration with customer service tools and APIs
 - Contextual awareness of customer data and order history
 
@@ -46,7 +46,7 @@ The chatbot leverages the following tools:
 
 The system consists of:
 
-1. Claude LLM as the core language model
+1. LLAMA LLM as the core language model
    - Handles natural language understanding
    - Determines which tools to use based on user queries
    - Generates human-like responses
